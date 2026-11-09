@@ -90,7 +90,11 @@
 
 // Dirección de la API. Para usar la API de otro equipo, poner aquí su IP,
 // por ejemplo: const BASE_URL = "http://192.168.1.34:8000";
-const BASE_URL = "http://localhost:8000";
+// - Servido por el contenedor del frontend (docker compose, puerto 8080):
+//   "/api", que nginx reenvía al contenedor de la API.
+// - En cualquier otro caso (p. ej. abriendo index.html con doble clic):
+//   la API en localhost:8000.
+const BASE_URL = location.port === "8080" ? "/api" : "http://localhost:8000";
 
 // Hace una petición a la API y devuelve el JSON de la respuesta.
 // Si el código de estado no es 2xx, lanza un error con el mensaje de la API.
