@@ -1,0 +1,227 @@
+<!doctype html>
+<html lang="es">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Tienda online</title>
+<style>
+  body { font-family: system-ui, sans-serif; background: #f4f5f7; color: #1f2328; margin: 0; }
+  main { max-width: 1000px; margin: 0 auto; padding: 16px; display: grid; gap: 16px; }
+  h1 { margin: 0; font-size: 22px; }
+  section { background: #fff; border: 1px solid #d8dee4; border-radius: 8px; padding: 16px; }
+  h2 { margin: 0 0 12px; font-size: 18px; }
+  h3 { margin: 16px 0 8px; font-size: 15px; }
+  table { width: 100%; border-collapse: collapse; font-size: 14px; }
+  th, td { text-align: left; padding: 6px; border-bottom: 1px solid #d8dee4; }
+  form { display: flex; flex-wrap: wrap; gap: 8px; align-items: flex-end; }
+  label { display: flex; flex-direction: column; gap: 4px; font-size: 13px; }
+  input, select, button { font: inherit; padding: 5px 8px; }
+  .oculto { display: none; }
+</style>
+</head>
+<body>
+<main>
+  <h1>Tienda online</h1>
+
+  <!-- ======================= PRODUCTOS ======================= -->
+  <section>
+    <h2>Productos</h2>
+    <table>
+      <thead><tr><th>Nombre</th><th>Tipo</th><th>Precio</th><th>Stock</th><th>Detalles</th></tr></thead>
+      <tbody id="tabla-productos"></tbody>
+    </table>
+
+    <h3>Crear producto</h3>
+    <form id="form-producto">
+      <label>Tipo
+        <select name="tipo" id="tipo-producto">
+          <option value="generico">Genérico</option>
+          <option value="electronico">Electrónico</option>
+          <option value="ropa">Ropa</option>
+        </select>
+      </label>
+      <label>Nombre <input name="nombre" required></label>
+      <label>Precio <input name="precio" type="number" step="0.01" required></label>
+      <label>Stock <input name="stock" type="number" step="1" required></label>
+      <label data-tipo="electronico">Meses de garantía <input name="meses_garantia" type="number" step="1"></label>
+      <label data-tipo="ropa">Talla <input name="talla"></label>
+      <label data-tipo="ropa">Color <input name="color"></label>
+      <button type="submit">Crear producto</button>
+    </form>
+  </section>
+
+  <!-- ======================= USUARIOS ======================= -->
+  <section>
+    <h2>Usuarios</h2>
+    <table>
+      <thead><tr><th>Nombre</th><th>Email</th><th>Rol</th></tr></thead>
+      <tbody id="tabla-usuarios"></tbody>
+    </table>
+  </section>
+
+  <!-- ======================= PEDIDOS ======================= -->
+  <section>
+    <h2>Pedidos</h2>
+    <h3>Crear pedido</h3>
+    <form id="form-pedido">
+      <label>Cliente <select id="pedido-cliente" required></select></label>
+      <label>Producto <select id="pedido-producto" required></select></label>
+      <label>Cantidad <input id="pedido-cantidad" type="number" step="1" value="1" required></label>
+      <button type="submit">Crear pedido</button>
+    </form>
+
+    <h3>Pedidos de un usuario</h3>
+    <form id="form-consulta">
+      <label>Usuario <select id="consulta-usuario" required></select></label>
+      <button type="submit">Consultar</button>
+    </form>
+    <table>
+      <thead><tr><th>Fecha</th><th>Productos</th><th>Total</th></tr></thead>
+      <tbody id="tabla-pedidos"></tbody>
+    </table>
+  </section>
+</main>
+
+<script>
+// =====================================================================
+// 1. COMUNICACIÓN CON LA API
+//    Todas las peticiones HTTP del frontend están en este bloque.
+// =====================================================================
+
+// Dirección de la API. Para usar la API de otro equipo, poner aquí su IP,
+// por ejemplo: const BASE_URL = "http://192.168.1.34:8000";
+const BASE_URL = "http://localhost:8000";
+
+// Hace una petición a la API y devuelve el JSON de la respuesta.
+// Si el código de estado no es 2xx, lanza un error con el mensaje de la API.
+async function peticion(metodo, ruta, cuerpo) {
+  const opciones = { method: metodo, headers: {} };
+  if (cuerpo !== undefined) {
+    opciones.headers["Content-Type"] = "application/json";
+    opciones.body = JSON.stringify(cuerpo);              // objeto JS -> texto JSON
+  }
+  const respuesta = await fetch(BASE_URL + ruta, opciones);
+  const datos = await respuesta.json();                  // texto JSON -> objeto JS
+  if (!respuesta.ok) {
+    throw new Error(`Error ${respuesta.status}: ${JSON.stringify(datos.detail)}`);
+  }
+  return datos;
+}
+
+// Una función por endpoint de la API
+const api = {
+  listarProductos:  ()      => peticion("GET",  "/productos"),                // GET /productos
+  crearProducto:    (datos) => peticion("POST", "/productos", datos),         // POST /productos
+  listarUsuarios:   ()      => peticion("GET",  "/usuarios"),                 // GET /usuarios
+  crearPedido:      (datos) => peticion("POST", "/pedidos", datos),           // POST /pedidos
+  pedidosDeUsuario: (id)    => peticion("GET",  `/usuarios/${id}/pedidos`),   // GET /usuarios/{id}/pedidos
+};
+
+// =====================================================================
+// 2. INTERFAZ: pintar los datos recibidos y leer los formularios
+// =====================================================================
+
+let productos = [];
+
+const $ = (id) => document.getElementById(id);
+const escapar = (t) => String(t).replace(/[&<>"']/g, c => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;", "'": "&#39;" }[c]));
+const opcion = (valor, texto) => `<option value="${valor}">${escapar(texto)}</option>`;
+
+// ---------- Visualización de productos
+async function cargarProductos() {
+  productos = await api.listarProductos();
+  $("tabla-productos").innerHTML = productos.map(p => {
+    let detalles = "";
+    if (p.tipo === "electronico") detalles = `Garantía: ${p.meses_garantia} meses`;
+    if (p.tipo === "ropa") detalles = `Talla ${escapar(p.talla)}, color ${escapar(p.color)}`;
+    return `<tr><td>${escapar(p.nombre)}</td><td>${p.tipo}</td>
+      <td>${p.precio.toFixed(2)} €</td><td>${p.stock}</td><td>${detalles}</td></tr>`;
+  }).join("");
+  $("pedido-producto").innerHTML = productos.map(p => opcion(p.id, p.nombre)).join("");
+}
+
+// ---------- Creación de productos
+function mostrarCamposSegunTipo() {
+  const tipo = $("tipo-producto").value;
+  document.querySelectorAll("#form-producto [data-tipo]").forEach(campo => {
+    campo.classList.toggle("oculto", campo.dataset.tipo !== tipo);
+    campo.querySelector("input").required = campo.dataset.tipo === tipo;   // obligatorio solo si está visible
+  });
+}
+$("tipo-producto").addEventListener("change", mostrarCamposSegunTipo);
+
+$("form-producto").addEventListener("submit", async (evento) => {
+  evento.preventDefault();
+  const f = new FormData(evento.target);
+  const datos = {
+    tipo: f.get("tipo"),
+    nombre: f.get("nombre"),
+    precio: Number(f.get("precio")),
+    stock: Number(f.get("stock")),
+  };
+  // Solo se envían los atributos adicionales del tipo elegido
+  if (datos.tipo === "electronico") datos.meses_garantia = Number(f.get("meses_garantia"));
+  if (datos.tipo === "ropa") { datos.talla = f.get("talla"); datos.color = f.get("color"); }
+  if (datos.tipo === "ropa" && (!datos.talla.trim() || !datos.color.trim())) {
+    alert("La talla y el color no pueden estar vacíos.");
+    return;
+  }
+  try {
+    await api.crearProducto(datos);
+    evento.target.reset();
+    mostrarCamposSegunTipo();
+    await cargarProductos();
+  } catch (error) {
+    alert(error.message);
+  }
+});
+
+// ---------- Visualización de usuarios
+async function cargarUsuarios() {
+  const usuarios = await api.listarUsuarios();
+  $("tabla-usuarios").innerHTML = usuarios.map(u => `<tr><td>${escapar(u.nombre)}</td>
+    <td>${escapar(u.email)}</td><td>${u.es_admin ? "Administrador" : "Cliente"}</td></tr>`).join("");
+  $("pedido-cliente").innerHTML = usuarios.filter(u => !u.es_admin).map(u => opcion(u.id, u.nombre)).join("");
+  $("consulta-usuario").innerHTML = usuarios.map(u => opcion(u.id, u.nombre)).join("");
+}
+
+// ---------- Creación de un pedido
+$("form-pedido").addEventListener("submit", async (evento) => {
+  evento.preventDefault();
+  const datos = {
+    cliente_id: $("pedido-cliente").value,
+    items: [{ producto_id: $("pedido-producto").value, cantidad: Number($("pedido-cantidad").value) }],
+  };
+  try {
+    const pedido = await api.crearPedido(datos);
+    alert(`Pedido creado. Total: ${pedido.total.toFixed(2)} €`);
+    await cargarProductos();   // el stock ha cambiado
+  } catch (error) {
+    alert(error.message);
+  }
+});
+
+// ---------- Consulta de los pedidos de un usuario
+$("form-consulta").addEventListener("submit", async (evento) => {
+  evento.preventDefault();
+  try {
+    const pedidos = await api.pedidosDeUsuario($("consulta-usuario").value);
+    const nombreProducto = (id) => (productos.find(p => p.id === id) || { nombre: id }).nombre;
+    $("tabla-pedidos").innerHTML = pedidos.map(p => `<tr>
+      <td>${new Date(p.fecha).toLocaleString("es-ES")}</td>
+      <td>${p.items.map(i => `${escapar(nombreProducto(i.producto_id))} × ${i.cantidad}`).join("<br>")}</td>
+      <td>${p.total.toFixed(2)} €</td></tr>`).join("");
+  } catch (error) {
+    alert(error.message);
+  }
+});
+
+// =====================================================================
+// 3. ARRANQUE: cargar los datos de la API al abrir la página
+// =====================================================================
+mostrarCamposSegunTipo();
+cargarProductos().catch(error => alert("No se pudo conectar con la API: " + error.message));
+cargarUsuarios().catch(() => {});
+</script>
+</body>
+</html>
