@@ -1,0 +1,17 @@
+# Levanta la API y el frontend juntos:  docker compose up --build
+# Ambos contenedores comparten la red que crea compose, así que el frontend
+# llega a la API con el nombre del servicio: http://api:8000
+services:
+  api:
+    build: .
+    image: tienda-online:1.0
+    ports:
+      - "8000:8000"
+
+  frontend:
+    build: ./src/frontend
+    image: tienda-online-frontend:1.0
+    ports:
+      - "8080:80"
+    depends_on:
+      - api
