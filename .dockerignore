@@ -1,0 +1,29 @@
+# Ficheros que NO se envían a Docker al construir la imagen
+
+# Control de versiones
+.git
+.gitignore
+
+# Entornos virtuales, cachés de Python y secretos
+.venv
+venv
+**/__pycache__
+**/*.py[cod]
+.env
+
+# Editores y sistema operativo
+.vscode
+.idea
+**/.DS_Store
+**/Thumbs.db
+
+# Ficheros de Docker y documentación (no hacen falta dentro de la imagen)
+Dockerfile
+.dockerignore
+docker-compose.yml
+README.md
+*.zip
+
+# Partes del proyecto que no forman parte de la API
+src/cliente
+src/frontend
